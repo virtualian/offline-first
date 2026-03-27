@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Offline-First Docs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css">
+  <style>
+    :root {
+      --theme-color: #3ecf8e;
+      --sidebar-width: 260px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    window.$docsify = {
+      name: 'Offline-First',
+      repo: '',
+      loadSidebar: true,
+      subMaxLevel: 2,
+      homepage: 'learner/explanation/01-online-first-supabase.md',
+
+      // Mermaid rendering
+      markdown: {
+        renderer: {
+          code(code, lang) {
+            if (lang === 'mermaid') {
+              return '<div class="mermaid">' + code + '</div>'
+            }
+            return this.origin.code.apply(this, arguments)
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Docsify -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+
+  <!-- Mermaid -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false, theme: 'default' })
+
+    // Re-render Mermaid diagrams after each page load
+    window.$docsify.plugins = [function (hook) {
+      hook.doneEach(function () {
+        mermaid.run({ querySelector: '.mermaid' })
+      })
+    }]
+  </script>
+
+  <!-- Syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-sql.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+</body>
+</html>

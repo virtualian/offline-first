@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "postgres-best-practices@supabase-agent-skills": true,
+    "supabase@claude-plugins-official": true
+  }
+}

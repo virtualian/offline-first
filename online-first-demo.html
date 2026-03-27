@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Supabase Notes Demo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p.subtitle { color: #666; font-size: 0.9rem; margin-top: 0; margin-bottom: 24px; }
+    .add-row { display: flex; gap: 8px; margin-bottom: 24px; }
+    input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+    button { padding: 8px 16px; background: #3ecf8e; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+    button:hover { background: #2db87a; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 10px 14px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; }
+    li .meta { font-size: 0.75rem; color: #aaa; margin-top: 4px; }
+    #status { font-size: 0.85rem; color: #888; margin-top: 16px; }
+  </style>
+</head>
+<body>
+
+  <h1>Supabase Notes Demo</h1>
+  <p class="subtitle">Reads and writes go directly to Supabase. No server, no framework — just HTML + the Supabase JS client.</p>
+
+  <div class="add-row">
+    <input id="noteInput" type="text" placeholder="Write a note…" />
+    <button onclick="addNote()">Add</button>
+  </div>
+
+  <ul id="notesList"></ul>
+  <div id="status"></div>
+
+  <!--
+    Load the Supabase JS client directly from CDN.
+    No npm, no bundler required.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <script>
+    // ─── Configuration ──────────────────────────────────────────────────────
+    // These values are safe to expose in the browser for a demo.
+    // The "publishable" key only allows operations permitted by your
+    // Supabase table policies (or, like here, an open table with no RLS).
+    const SUPABASE_URL  = 'https://iorrrgzsprfzaboqbiwa.supabase.co'
+    const SUPABASE_KEY  = 'sb_publishable_zV-S6l76J0i2t-449TyqeQ_zuOundna'
+
+    // ─── Client ─────────────────────────────────────────────────────────────
+    // supabase.createClient() is the entry point.
+    // It returns a client object we use for all reads and writes.
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    // ─── Read ────────────────────────────────────────────────────────────────
+    // Fetch all notes from the "notes" table, newest first.
+    async function loadNotes() {
+      setStatus('Loading…')
+
+      const { data, error } = await db
+        .from('notes')           // which table
+        .select('*')             // which columns (* = all)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        setStatus('Error loading notes: ' + error.message)
+        return
+      }
+
+      renderNotes(data)
+      setStatus(`${data.length} note${data.length !== 1 ? 's' : ''} loaded.`)
+    }
+
+    // ─── Write ───────────────────────────────────────────────────────────────
+    // Insert a new row into the "notes" table.
+    async function addNote() {
+      const input = document.getElementById('noteInput')
+      const content = input.value.trim()
+      if (!content) return
+
+      setStatus('Saving…')
+
+      const { error } = await db
+        .from('notes')
+        .insert({ content })     // insert a row with just the content column
+
+      if (error) {
+        setStatus('Error saving note: ' + error.message)
+        return
+      }
+
+      input.value = ''
+      await loadNotes()          // reload the list to show the new note
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+    function renderNotes(notes) {
+      const list = document.getElementById('notesList')
+      list.innerHTML = notes.map(note => `
+        <li>
+          <div>${escapeHtml(note.content)}</div>
+          <div class="meta">${new Date(note.created_at).toLocaleString()}</div>
+        </li>
+      `).join('')
+    }
+
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    }
+
+    // Also submit on Enter key
+    document.getElementById('noteInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addNote()
+    })
+
+    // ─── Start ───────────────────────────────────────────────────────────────
+    loadNotes()
+  </script>
+
+</body>
+</html>
