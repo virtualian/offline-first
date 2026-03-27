@@ -2,3 +2,4 @@
   - Explanation
     - [01 · Online-First with Supabase](learner/explanation/01-online-first-supabase.md)
     - [02 · Monitoring Supabase](learner/explanation/02-monitoring-supabase.md)
+    - [03 · Realtime Sync with Supabase](learner/explanation/03-realtime-sync-supabase.md)
