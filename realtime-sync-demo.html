@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Supabase Realtime Sync Demo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p.subtitle { color: #666; font-size: 0.9rem; margin-top: 0; margin-bottom: 24px; }
+    .add-row { display: flex; gap: 8px; margin-bottom: 24px; }
+    input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+    button { padding: 8px 16px; background: #3ecf8e; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+    button:hover { background: #2db87a; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 10px 14px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; }
+    li.new { animation: highlight 1.5s ease-out; }
+    @keyframes highlight {
+      0%   { background: #f0fdf4; border-color: #3ecf8e; }
+      100% { background: transparent; border-color: #eee; }
+    }
+    li .meta { font-size: 0.75rem; color: #aaa; margin-top: 4px; }
+    #status { font-size: 0.85rem; color: #888; margin-top: 16px; }
+    #live-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 8px;
+      vertical-align: middle;
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    #live-badge.connected {
+      background: #dcfce7;
+      color: #15803d;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>
+    Supabase Realtime Sync Demo
+    <span id="live-badge">connecting…</span>
+  </h1>
+  <p class="subtitle">
+    Any note added in any tab or browser window appears here instantly —
+    no polling, no refresh. Powered by Supabase Realtime over WebSocket.
+  </p>
+
+  <div class="add-row">
+    <input id="noteInput" type="text" placeholder="Write a note…" />
+    <button onclick="addNote()">Add</button>
+  </div>
+
+  <ul id="notesList"></ul>
+  <div id="status"></div>
+
+  <!--
+    Same CDN client as online-first-demo.html — no extra dependencies needed.
+    Realtime is built into the Supabase JS client.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <script>
+    // ─── Configuration ──────────────────────────────────────────────────────
+    const SUPABASE_URL  = 'https://iorrrgzsprfzaboqbiwa.supabase.co'
+    const SUPABASE_KEY  = 'sb_publishable_zV-S6l76J0i2t-449TyqeQ_zuOundna'
+
+    // ─── Client ─────────────────────────────────────────────────────────────
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+
+    // In-memory list — maintained by the initial load and the realtime subscription.
+    // We keep our own copy so we can prepend new notes without re-fetching.
+    let notes = []
+
+    // ─── Read ────────────────────────────────────────────────────────────────
+    // Fetch existing notes once on startup. After this, the subscription keeps
+    // the list current — we never call loadNotes() again.
+    async function loadNotes() {
+      setStatus('Loading…')
+
+      const { data, error } = await db
+        .from('notes')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        setStatus('Error loading notes: ' + error.message)
+        return
+      }
+
+      notes = data
+      renderNotes(notes)
+      setStatus(`${notes.length} note${notes.length !== 1 ? 's' : ''} loaded. Listening for changes…`)
+    }
+
+    // ─── Write ───────────────────────────────────────────────────────────────
+    // Insert a new row. We do NOT reload the list here — the realtime
+    // subscription will receive the INSERT event and update the UI instead.
+    async function addNote() {
+      const input = document.getElementById('noteInput')
+      const content = input.value.trim()
+      if (!content) return
+
+      setStatus('Saving…')
+
+      const { error } = await db
+        .from('notes')
+        .insert({ content })
+
+      if (error) {
+        setStatus('Error saving note: ' + error.message)
+        return
+      }
+
+      input.value = ''
+      // No loadNotes() call here — the subscription handles the UI update.
+    }
+
+    // ─── Realtime Subscription ───────────────────────────────────────────────
+    // Subscribe to INSERT events on the notes table.
+    //
+    // When any client — this tab, another tab, another browser, another device —
+    // inserts a row, Supabase detects the change via Postgres WAL (Write-Ahead Log)
+    // and pushes it to all subscribers over a persistent WebSocket connection.
+    //
+    // The payload contains the new row's data, so we can prepend it to our local
+    // list without making another network request.
+    function subscribeToNotes() {
+      db.channel('notes-changes')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notes' },
+          (payload) => {
+            // payload.new is the newly inserted row
+            const newNote = payload.new
+            notes.unshift(newNote)          // prepend to keep newest-first order
+            renderNotes(notes, newNote.id)  // pass the new id to animate it
+            setStatus(`${notes.length} note${notes.length !== 1 ? 's' : ''} — last update just now`)
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'notes' },
+          (payload) => {
+            // payload.old contains the deleted row. With default replica identity,
+            // only the primary key (id) is guaranteed to be present — which is
+            // all we need to remove it from our local list.
+            notes = notes.filter(n => n.id !== payload.old.id)
+            renderNotes(notes)
+            setStatus(`${notes.length} note${notes.length !== 1 ? 's' : ''} — last update just now`)
+          }
+        )
+        .subscribe((status) => {
+          const badge = document.getElementById('live-badge')
+          if (status === 'SUBSCRIBED') {
+            badge.textContent = 'Live'
+            badge.classList.add('connected')
+          } else {
+            badge.textContent = status.toLowerCase()
+            badge.classList.remove('connected')
+          }
+        })
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+    function renderNotes(notes, highlightId) {
+      const list = document.getElementById('notesList')
+      list.innerHTML = notes.map(note => `
+        <li class="${note.id === highlightId ? 'new' : ''}">
+          <div>${escapeHtml(note.content)}</div>
+          <div class="meta">${new Date(note.created_at).toLocaleString()}</div>
+        </li>
+      `).join('')
+    }
+
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    }
+
+    document.getElementById('noteInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addNote()
+    })
+
+    // ─── Start ───────────────────────────────────────────────────────────────
+    // Load existing notes first, then open the realtime subscription.
+    // Order matters: load before subscribe so we don't miss events that
+    // arrive while the initial fetch is in flight.
+    loadNotes()
+    subscribeToNotes()
+  </script>
+
+</body>
+</html>
