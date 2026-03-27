@@ -2,6 +2,20 @@
 
 A learning project exploring offline-first data access and synchronisation using Supabase and PowerSync. Built in small steps, starting from the simplest possible online-first baseline and progressively adding offline capabilities.
 
+## Prerequisites
+
+| Prerequisite | Purpose | Notes |
+|---|---|---|
+| **Python 3** | Serve the docs site locally | `python3 -m http.server` — ships with macOS |
+| **Chrome** | Run the demo and browser tooling | Any recent version |
+| **Supabase account** | Back the online-first demo | Free tier is sufficient; you need a project with a `notes` table (`id uuid`, `content text`, `created_at timestamptz`) |
+| **Claude Code** | AI assistance, Supabase MCP integration | Install: `npm i -g @anthropic-ai/claude-code` |
+| **Claude in Chrome extension** | Visual testing and browser automation via MCP | Optional; install from the Chrome Web Store |
+
+The demo HTML file (`online-first-demo.html`) has a Supabase URL and anon key hardcoded at the top. Replace these with your own project's values before running.
+
+---
+
 ## What's Here
 
 | File | What it is |
