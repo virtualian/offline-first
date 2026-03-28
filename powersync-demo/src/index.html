@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PowerSync Offline-First Notes Demo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p.subtitle { color: #666; font-size: 0.9rem; margin-top: 0; margin-bottom: 24px; }
+    .add-row { display: flex; gap: 8px; margin-bottom: 24px; }
+    input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+    button { padding: 8px 16px; background: #3ecf8e; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+    button:hover { background: #2db87a; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { padding: 10px 14px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; }
+    li .meta { font-size: 0.75rem; color: #aaa; margin-top: 4px; }
+    #status { font-size: 0.85rem; color: #888; margin-top: 16px; }
+  </style>
+  <script type="module" src="./index.js"></script>
+</head>
+<body>
+
+  <h1>PowerSync Offline-First Notes</h1>
+  <p class="subtitle">
+    Reads and writes go to a local SQLite database (via WASM).
+    No network required — data lives on your device.
+    Sync with Supabase will be added in a later step.
+  </p>
+
+  <div class="add-row">
+    <input id="noteInput" type="text" placeholder="Write a note…" />
+    <button onclick="addNote()">Add</button>
+  </div>
+
+  <ul id="notesList"></ul>
+  <div id="status"></div>
+
+</body>
+</html>
