@@ -44,6 +44,7 @@
       align-items: center;
       height: 58px;
       padding: 0 1.5em;
+      overflow: hidden;
     }
     .site-header .home-btn {
       display: flex;
@@ -68,6 +69,9 @@
       letter-spacing: -0.02em;
       white-space: nowrap;
       text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
     .site-header .site-brand:hover {
       color: var(--theme-color);
@@ -179,6 +183,20 @@
     }
     .search .input-wrap {
       border-radius: 6px;
+    }
+
+    /* ── Responsive: tablet & mobile ───────────── */
+    @media (max-width: 768px) {
+      .site-header {
+        padding: 0 0.75em;
+      }
+      .site-header .site-subtitle,
+      .site-header .role-tabs {
+        display: none;
+      }
+      .site-header .site-brand {
+        font-size: 1rem;
+      }
     }
   </style>
 </head>
