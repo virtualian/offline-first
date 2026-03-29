@@ -71,6 +71,8 @@ Open `http://localhost:5173` — add notes and watch the sync badge.
 
 **Testing multi-client sync:** Open a second browser window (or use the [PowerSync Diagnostics App](https://diagnostics-app.powersync.com)) to see changes appear across clients. Each browser instance has its own local SQLite — PowerSync keeps them in sync via the cloud.
 
+**Note on conflicts:** Each note gets a unique UUID, so two clients adding the same text creates two separate rows — not a conflict. This demo only supports insert and delete. Row updates and conflict reconciliation will be covered in the next version.
+
 ### 6. Run the docs
 
 ```bash
