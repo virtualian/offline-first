@@ -1,5 +1,14 @@
 # Release Notes
 
+## v3.2.1 — Responsive Docs Site
+
+Released: 2026-03-29
+
+- Fixed docs site layout overflow at narrow viewport widths
+- Header brand text truncates gracefully instead of forcing horizontal scroll
+- Subtitle and role tabs hidden on mobile (≤768px) where sidebar provides equivalent navigation
+- Header padding reduced on mobile for better space utilisation
+
 ## v3.2.0 — Improved Docs Site and Release Documentation
 
 Released: 2026-03-29

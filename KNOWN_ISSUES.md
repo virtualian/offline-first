@@ -2,13 +2,13 @@
 
 > **Note:** Many issues in earlier releases (v1.0.0–v2.0.0) are deliberate simplifications to keep the implementation accessible for learning. They will be addressed progressively in later releases as complexity is layered in.
 
+## v3.2.1
+
+No new issues introduced. Documentation site responsive layout issue from v3.2.0 is resolved.
+
 ## v3.2.0
 
-### Documentation site not responsive to device display sizes
-
-The Docsify-based docs site does not adapt to mobile or tablet viewports. The sidebar, header, and content layout assume a desktop-width display. On smaller screens the sidebar overlaps content and the header tabs may be clipped.
-
-**Workaround:** View the docs on a desktop browser or zoom out on mobile.
+### ~~Documentation site not responsive to device display sizes~~ — resolved in v3.2.1
 
 ### v3.x demo is overly complicated
 
