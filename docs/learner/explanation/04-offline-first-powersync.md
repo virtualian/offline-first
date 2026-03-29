@@ -8,6 +8,8 @@ The PowerSync demo flips this model. Instead of reading from and writing to Supa
 
 This is the core idea behind **offline-first** (also called **local-first**): the app works without a network connection, and sync happens opportunistically.
 
+> For setup and testing steps, see [How to Set Up and Test the PowerSync Demo](../how-to/01-setup-powersync-demo.md).
+
 ## Why we needed a bundler
 
 The online-first demos are single HTML files that load the Supabase client from a CDN `<script>` tag. No build step, no npm — just open the file and go.
@@ -78,26 +80,11 @@ If you change the Supabase table — say, adding an `updated_at` column — you 
 
 Missing step 3 is a common gotcha — Supabase has the column, Sync Streams replicate it, but the client never sees the data because the local schema doesn't declare it.
 
-**Shortcut:** The PowerSync Dashboard has a **Client SDK Setup** page that generates the client schema from your deployed Sync Streams config. Click **Client SDK Setup** in the sidebar → select your language → copy the generated schema. This is a one-time generation tool, not a live sync — you still need to update it manually when the schema changes.
+**Shortcut:** The PowerSync Dashboard has a **Client SDK Setup** page that generates the client schema from your deployed Sync Streams config. Click **Client SDK Setup** in the sidebar, select your language, and copy the generated schema. This is a one-time generation tool, not a live sync — you still need to update it manually when the schema changes.
 
-## What this step accomplished
+## How sync actually works
 
-After this step, the demo app can:
-- Open a local SQLite database in the browser (via WASM)
-- Insert notes into the local database
-- Query and display notes from the local database
-- Work entirely offline — no network calls at all
-
-What it **cannot** do yet:
-- Sync with Supabase (requires PowerSync Cloud setup — Step 2)
-- Persist across browser storage clears (OPFS persistence is default, but not yet battle-tested here)
-- Show real-time updates from other clients (requires the sync connector — Step 3)
-
-## Step 2: Connecting PowerSync Cloud to Supabase
-
-### How sync actually works
-
-In Step 1, the app reads and writes to a local SQLite database — completely offline. But how does that data eventually reach Supabase (and other clients)?
+The app reads and writes to a local SQLite database — completely offline. But how does that data eventually reach Supabase (and other clients)?
 
 PowerSync uses **PostgreSQL's Write-Ahead Log (WAL)** to detect changes. Here's the flow:
 
@@ -119,7 +106,7 @@ sequenceDiagram
 
 2. **Sync Streams** — A configuration on the PowerSync Cloud side that defines *which* tables and rows to sync to *which* clients. Think of it as a filter: "send all rows from the `notes` table to every connected client."
 
-3. **Client sync** — The PowerSync SDK on the client maintains a persistent connection to PowerSync Cloud. When changes arrive via WAL, PowerSync pushes them down to the client's local SQLite. When the client writes locally, the SDK queues the changes and uploads them to Supabase through the connector (Step 3).
+3. **Client sync** — The PowerSync SDK on the client maintains a persistent connection to PowerSync Cloud. When changes arrive via WAL, PowerSync pushes them down to the client's local SQLite. When the client writes locally, the SDK queues the changes and uploads them to Supabase through the connector.
 
 ```mermaid
 sequenceDiagram
@@ -141,84 +128,19 @@ sequenceDiagram
     PS->>C2: Push change to other clients
 ```
 
-### What we configured in Supabase
+### Why a dedicated replication role
 
-Three SQL statements set up the Supabase side:
+PowerSync needs `REPLICATION` privilege to read the WAL. The built-in Supabase roles don't have this. Creating a separate role with only `SELECT` + `REPLICATION` follows the principle of least privilege — PowerSync can read changes but can't modify data through this connection.
 
-```sql
--- 1. A dedicated database role for PowerSync to connect with
-CREATE ROLE powersync_role WITH REPLICATION LOGIN PASSWORD '...';
+### Why a publication
 
--- 2. Read access so PowerSync can see the data
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO powersync_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT ON TABLES TO powersync_role;
+Postgres WAL contains changes for *every* table. A publication acts as a filter: "only replicate changes to the `notes` table." Without this, PowerSync would receive (and have to discard) changes from system tables, auth tables, and anything else in the database. Using `FOR TABLE public.notes` instead of `FOR ALL TABLES` keeps it targeted.
 
--- 3. A publication that tells Postgres which tables to replicate
-CREATE PUBLICATION powersync FOR TABLE public.notes;
-```
+### Why ALTER DEFAULT PRIVILEGES
 
-**Why a dedicated role?** PowerSync needs `REPLICATION` privilege to read the WAL. The built-in Supabase roles don't have this. Creating a separate role with only `SELECT` + `REPLICATION` follows the principle of least privilege — PowerSync can read changes but can't modify data through this connection.
+The `GRANT SELECT` only applies to tables that exist *right now*. `ALTER DEFAULT PRIVILEGES` ensures that any tables created in the future automatically get the same SELECT grant for `powersync_role`. This is forward-looking — if we add more tables later, we won't need to remember to grant access again.
 
-**Why a publication?** Postgres WAL contains changes for *every* table. A publication acts as a filter: "only replicate changes to the `notes` table." Without this, PowerSync would receive (and have to discard) changes from system tables, auth tables, and anything else in the database. We used `FOR TABLE public.notes` instead of `FOR ALL TABLES` to keep it targeted.
-
-**Why `ALTER DEFAULT PRIVILEGES`?** The `GRANT SELECT` only applies to tables that exist *right now*. `ALTER DEFAULT PRIVILEGES` ensures that any tables created in the future automatically get the same SELECT grant for `powersync_role`. This is forward-looking — if we add more tables later, we won't need to remember to grant access again.
-
-### PowerSync Cloud setup (manual steps)
-
-These steps happen in the PowerSync Dashboard — there's no API for this yet.
-
-**1. Create a PowerSync Cloud account**
-- Go to [powersync.com](https://www.powersync.com) and sign up for a free account
-- Create a new project
-
-**2. Create a PowerSync instance**
-- In your project, click "Add Instance" and choose Development
-- Select a cloud region close to your Supabase project (check your Supabase dashboard for the region)
-
-**3. Connect to Supabase**
-- In your Supabase Dashboard, go to **Settings → Database → Connection string** and copy the **direct** connection string (not the pooled one — WAL replication requires a direct connection)
-- In the PowerSync Dashboard, go to **Database Connections → Connect to Source Database**
-- Paste the connection URI
-- Replace the username with `powersync_role` and the password with the one from the SQL above
-- Click **Test Connection**, then **Save**
-
-**4. Configure Sync Streams**
-- In the PowerSync Dashboard, go to **Sync Streams**
-- Replace the contents with:
-
-```yaml
-config:
-  edition: 3
-
-streams:
-  all_notes:
-    auto_subscribe: true
-    query: SELECT * FROM notes
-```
-
-- Click **Validate** to check against your database, then **Deploy**
-
-This configuration says: sync all rows from the `notes` table to every client, automatically, as soon as they connect. There's no user-based filtering because our demo has no authentication — every client sees every note.
-
-**5. Note your PowerSync instance URL**
-- In the PowerSync Dashboard, click **Connect** to see your instance URL
-- It looks like: `https://your-instance.powersync.journeyapps.com`
-- You'll need this in Step 3 when we write the connector code
-
-### What this step accomplished
-
-The server-side plumbing is now in place:
-- Supabase is configured to replicate `notes` table changes via WAL
-- PowerSync Cloud (once you complete the manual steps above) will receive those changes and push them to connected clients
-
-What's still missing:
-- The client-side connector that authenticates with PowerSync Cloud and uploads local writes to Supabase (Step 3)
-- The demo wired up to actually sync (Step 4)
-
-## Step 3: The connector
-
-### What the connector does
+## What the connector does
 
 The connector is a class with two methods that PowerSync calls automatically:
 
@@ -248,9 +170,9 @@ From this point, two things happen in parallel:
 - **Download path** — PowerSync Cloud pushes data from Supabase (via WAL) into the local SQLite
 - **Upload path** — the connector sends local writes to Supabase via the upload queue
 
-### Reactive UI with db.watch()
+## Reactive UI with db.watch()
 
-In Step 1, we called `loadNotes()` manually after every insert. With sync, notes can arrive from other clients at any time — we can't predict when to reload.
+In the initial local-only version, we called `loadNotes()` manually after every insert. With sync, notes can arrive from other clients at any time — we can't predict when to reload.
 
 `db.watch()` solves this. It returns an async iterable that emits new query results whenever the underlying table changes — whether from a local write or a sync from PowerSync Cloud:
 
@@ -262,11 +184,11 @@ for await (const result of db.watch('SELECT * FROM notes ORDER BY created_at DES
 
 This replaces the manual reload pattern entirely. The UI updates automatically, whether you added a note or another device did.
 
-### The sync badge
+## The sync badge
 
-The UI now shows a status badge (like the "Live" badge in the online-sync demo):
+The UI shows a status badge (like the "Live" badge in the online-sync demo):
 - **Synced** (green) — connected to PowerSync Cloud, sync is active
-- **Connecting…** (red) — establishing connection
+- **Connecting...** (red) — establishing connection
 - **Offline** (red) — no connection, working from local data only
 
 This uses the `registerListener` API on the database:
@@ -279,18 +201,7 @@ db.registerListener({
 })
 ```
 
-### What this step accomplished
-
-The demo is now fully functional offline-first:
-- Notes are stored locally in SQLite (instant reads and writes)
-- Changes sync bidirectionally with Supabase via PowerSync Cloud
-- The UI updates reactively when sync delivers new data
-- Delete notes with the × button — deletes sync to Supabase via the same connector
-- A badge shows "Online hh:mm:ss" (green) or "Offline hh:mm:ss" (red) with a live-ticking duration
-- A global "Last sync'd +hh:mm:ss" / "Not sync'd -hh:mm:ss" indicator shows table-level sync status
-- Each unsynced note shows "Not sync'd -hh:mm:ss" (red) — queried from PowerSync's internal `ps_crud` upload queue
-- Timestamps display as `YYYY-MM-DD hh:mm:ss.ss` and are stored as ISO 8601
-- Everything works offline — sync resumes when connectivity returns
+The badge provides immediate visual feedback about connectivity state, replacing the need to manually check sync status.
 
 ## Architecture comparison
 
